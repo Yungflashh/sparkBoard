@@ -1,20 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useRef, useState } from 'react'
 
-const CIRCLE_R = 32
+const CIRCLE_R = 34
+const CLICK_MOVE_THRESHOLD = 4
 
 export default function App() {
   const [circles, setCircles] = useState([])
   const [connections, setConnections] = useState([])
-  const [ghostLine, setGhostLine] = useState(null)
-
-  const circlesRef = useRef(circles)
-  const connectionsRef = useRef(connections)
-  useEffect(() => { circlesRef.current = circles }, [circles])
-  useEffect(() => { connectionsRef.current = connections }, [connections])
+  const [selectedForConnect, setSelectedForConnect] = useState(null)
 
   const svgRef = useRef(null)
   const idRef = useRef(1)
-  const connectingFromRef = useRef(null)
   const movingRef = useRef(null)
 
   function nextId(prefix) { return `${prefix}-${idRef.current++}` }
@@ -24,7 +19,7 @@ export default function App() {
     return { x: clientX - rect.left, y: clientY - rect.top }
   }
 
-  // ---- Column → workspace (HTML5 drag-and-drop) ----
+  // ---- Column → workspace via HTML5 drag-and-drop ----
   function handleColumnDragStart(e) {
     e.dataTransfer.setData('text/plain', 'circle')
     e.dataTransfer.effectAllowed = 'copy'
@@ -40,60 +35,62 @@ export default function App() {
     setCircles(cs => [...cs, { id: nextId('c'), x, y }])
   }
 
-  // ---- Move a placed circle ----
+  // ---- Circle mouse handling: click = connect, drag = move ----
   function handleCircleMouseDown(e, c) {
     e.stopPropagation()
     const { x, y } = clientToSvg(e.clientX, e.clientY)
-    movingRef.current = { id: c.id, offsetX: x - c.x, offsetY: y - c.y }
+    movingRef.current = {
+      id: c.id,
+      offsetX: x - c.x,
+      offsetY: y - c.y,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      moved: false,
+    }
     window.addEventListener('mousemove', handleCircleMouseMove)
     window.addEventListener('mouseup', handleCircleMouseUp)
   }
   function handleCircleMouseMove(e) {
     const m = movingRef.current
     if (!m) return
+    if (!m.moved) {
+      const d = Math.hypot(e.clientX - m.startClientX, e.clientY - m.startClientY)
+      if (d < CLICK_MOVE_THRESHOLD) return
+      m.moved = true
+    }
     const { x, y } = clientToSvg(e.clientX, e.clientY)
     setCircles(cs =>
       cs.map(c => (c.id === m.id ? { ...c, x: x - m.offsetX, y: y - m.offsetY } : c))
     )
   }
   function handleCircleMouseUp() {
-    movingRef.current = null
+    const m = movingRef.current
     window.removeEventListener('mousemove', handleCircleMouseMove)
     window.removeEventListener('mouseup', handleCircleMouseUp)
+    if (m && !m.moved) toggleConnect(m.id)
+    movingRef.current = null
   }
 
-  // ---- Connect two circles (drag from the small right-side handle) ----
-  function handleHandleMouseDown(e, c) {
-    e.stopPropagation()
-    connectingFromRef.current = c.id
-    const { x, y } = clientToSvg(e.clientX, e.clientY)
-    setGhostLine({ x1: c.x + CIRCLE_R, y1: c.y, x2: x, y2: y })
-    window.addEventListener('mousemove', handleConnectMove)
-    window.addEventListener('mouseup', handleConnectUp)
+  function toggleConnect(circleId) {
+    setSelectedForConnect(current => {
+      if (current === null) return circleId
+      if (current === circleId) return null
+      setConnections(cs => {
+        const dup = cs.find(
+          cn =>
+            (cn.from === current && cn.to === circleId) ||
+            (cn.from === circleId && cn.to === current)
+        )
+        if (dup) return cs
+        return [...cs, { id: nextId('conn'), from: current, to: circleId }]
+      })
+      return null
+    })
   }
-  function handleConnectMove(e) {
-    const { x, y } = clientToSvg(e.clientX, e.clientY)
-    setGhostLine(g => (g ? { ...g, x2: x, y2: y } : g))
-  }
-  function handleConnectUp(e) {
-    window.removeEventListener('mousemove', handleConnectMove)
-    window.removeEventListener('mouseup', handleConnectUp)
-    const { x, y } = clientToSvg(e.clientX, e.clientY)
-    const fromId = connectingFromRef.current
-    connectingFromRef.current = null
-    setGhostLine(null)
-    if (!fromId) return
-    const target = circlesRef.current.find(
-      c => c.id !== fromId && Math.hypot(c.x - x, c.y - y) <= CIRCLE_R
-    )
-    if (!target) return
-    const duplicate = connectionsRef.current.find(
-      cn =>
-        (cn.from === fromId && cn.to === target.id) ||
-        (cn.from === target.id && cn.to === fromId)
-    )
-    if (duplicate) return
-    setConnections(cs => [...cs, { id: nextId('conn'), from: fromId, to: target.id }])
+
+  // Clicking empty canvas cancels a pending selection
+  function handleCanvasMouseDown() {
+    setSelectedForConnect(null)
   }
 
   function deleteConnection(id) {
@@ -102,6 +99,7 @@ export default function App() {
   function deleteCircle(id) {
     setCircles(cs => cs.filter(c => c.id !== id))
     setConnections(cs => cs.filter(c => c.from !== id && c.to !== id))
+    setSelectedForConnect(s => (s === id ? null : s))
   }
 
   return (
@@ -119,7 +117,7 @@ export default function App() {
       >
         <strong style={{ fontSize: 15 }}>Drag &amp; Connect Circles</strong>
         <span style={{ fontSize: 12, color: '#666' }}>
-          Drag the circle from the column onto the workspace, then drag from a placed circle's right dot to another to connect them.
+          Drag circles from the column onto the workspace, then click one circle and click another to connect them.
         </span>
       </header>
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
@@ -177,7 +175,7 @@ export default function App() {
               textAlign: 'center',
             }}
           >
-            Drag this onto the workspace to add a circle. Repeat for a second one, then link them.
+            Drag onto the workspace to add a circle. Do it twice, then click both to link them.
           </p>
         </aside>
         <svg
@@ -185,6 +183,7 @@ export default function App() {
           style={{ flex: 1, background: '#f7f6f2', display: 'block' }}
           onDragOver={handleCanvasDragOver}
           onDrop={handleCanvasDrop}
+          onMouseDown={handleCanvasMouseDown}
         >
           {connections.map(conn => {
             const from = circles.find(c => c.id === conn.from)
@@ -200,51 +199,46 @@ export default function App() {
                 stroke="#378ADD"
                 strokeWidth={2.5}
                 style={{ cursor: 'pointer' }}
-                onClick={() => deleteConnection(conn.id)}
+                onClick={e => {
+                  e.stopPropagation()
+                  deleteConnection(conn.id)
+                }}
               />
             )
           })}
-          {ghostLine && (
-            <line
-              x1={ghostLine.x1}
-              y1={ghostLine.y1}
-              x2={ghostLine.x2}
-              y2={ghostLine.y2}
-              stroke="#999"
-              strokeWidth={2}
-              strokeDasharray="4 4"
-            />
-          )}
-          {circles.map(c => (
-            <g key={c.id}>
+          {circles.map(c => {
+            const selected = selectedForConnect === c.id
+            return (
               <circle
+                key={c.id}
                 cx={c.x}
                 cy={c.y}
                 r={CIRCLE_R}
                 fill="#378ADD"
-                stroke="#1f6ab8"
-                strokeWidth={2}
-                style={{ cursor: 'grab' }}
+                stroke={selected ? '#f4a300' : '#1f6ab8'}
+                strokeWidth={selected ? 4 : 2}
+                style={{ cursor: 'pointer' }}
                 onMouseDown={e => handleCircleMouseDown(e, c)}
                 onContextMenu={e => {
                   e.preventDefault()
                   deleteCircle(c.id)
                 }}
               />
-              <circle
-                cx={c.x + CIRCLE_R}
-                cy={c.y}
-                r={6}
-                fill="#fff"
-                stroke="#1f6ab8"
-                strokeWidth={2}
-                style={{ cursor: 'crosshair' }}
-                onMouseDown={e => handleHandleMouseDown(e, c)}
-              >
-                <title>Drag from here to another circle to connect them</title>
-              </circle>
-            </g>
-          ))}
+            )
+          })}
+          {selectedForConnect && (
+            <text
+              x="50%"
+              y={22}
+              textAnchor="middle"
+              fontSize={13}
+              fill="#c47a00"
+              fontWeight={600}
+              style={{ pointerEvents: 'none', userSelect: 'none' }}
+            >
+              Now click another circle to connect
+            </text>
+          )}
           {circles.length === 0 && (
             <text
               x="50%"
