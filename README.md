@@ -1,4 +1,4 @@
-# Dot Connector
+# Sparkboard
 
 A drag-and-drop component builder: drag parts from the left palette onto the canvas,
 then connect them by dragging from a node's right-side dot to another node.
