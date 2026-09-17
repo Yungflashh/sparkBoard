@@ -1,7 +1,9 @@
-# Sparkboard
+# Drag & Connect Circles
 
-A drag-and-drop component builder: drag parts from the left palette onto the canvas,
-then connect them by dragging from a node's right-side dot to another node.
+A minimal drag-and-connect workspace built with Vite + React 18.
+
+Drag the circle from the left column onto the workspace, then drag from a placed
+circle's right dot to another circle to connect them with a line.
 
 ## Run it
 
@@ -12,35 +14,21 @@ npm run dev
 
 Then open the local URL Vite prints (usually http://localhost:5173).
 
-## How it works
+## What it does
 
-- **Add a component**: drag any item from the left sidebar onto the canvas. Drop
-  position becomes the node's position.
-- **Move a component**: mousedown and drag the node body.
-- **Connect two components**: mousedown on the small filled dot on a node's right
-  edge, drag to the target node, release. A curved line is drawn between them.
+- **Column (left)**: a single reusable "Circle" item.
+- **Workspace (right)**: an SVG canvas where dropped circles live.
+- **Drag & drop** the Circle from the column onto the workspace to place a new circle. Do it twice to have two.
+- **Move** a placed circle by dragging its body.
+- **Connect** two circles by dragging from a placed circle's small right-side dot onto another circle.
 - **Delete a connection**: click on the line.
-- **Delete a node**: right-click it (also removes any connections touching it).
-- **Undo / Redo**: toolbar buttons, backed by a full state snapshot stack.
-- **Zoom / pan**: scroll wheel to zoom (centered on the cursor), click-drag on
-  empty canvas space to pan. "Reset view" restores the default viewBox.
-- **Save / Load**: "Save" writes the current nodes and connections to
-  `localStorage`; "Load" restores the last saved layout. This is a simple
-  starting point — swap it for a backend call if you need shared/persisted
-  layouts across devices.
+- **Delete a circle**: right-click it (also removes any lines touching it).
 
-## Where to extend this
+That is intentionally the whole feature set.
 
-- `PALETTE` in `src/App.jsx` is just an array of `{ type, label, color }` —
-  add as many component types as you want, or swap the colored dot for a
-  real icon.
-- Connections are stored as plain `{ id, from, to }` objects, so it's
-  straightforward to add validation rules (e.g. "a wheel can only connect to
-  an axle") by checking node types before committing a new connection in
-  `handleConnectMouseUp`.
-- All mutations go through `commit()`, which is also what powers undo/redo —
-  any new feature that changes `nodes`/`connections` should go through it so
-  undo keeps working.
-- No canvas library is used (just SVG + React state), so the whole
-  interaction model is readable in one file if you want to understand or
-  rewrite it — see `src/App.jsx`.
+## Files
+
+- `src/App.jsx` — the whole app (state, event handlers, and JSX in one component).
+- `src/main.jsx` — Vite/React entry point.
+- `src/index.css` — a handful of resets.
+- `index.html` — Vite's HTML shell.
