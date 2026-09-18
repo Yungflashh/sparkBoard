@@ -20,8 +20,7 @@ Then open the local URL Vite prints (usually http://localhost:5173).
 - **Workspace (right)**: an SVG canvas where dropped circles live.
 - **Drag & drop** the Circle from the column onto the workspace to place a new circle. Do it twice to have two.
 - **Move** a placed circle by dragging its body.
-- **Connect two circles**: click one circle (it lights up orange), then click another circle. A line is drawn between them.
-- **Cancel a pending connection**: click empty workspace.
+- **Connect two circles**: press-and-hold on the first circle and drag the pointer to the second one — a dashed orange line follows your cursor while you drag. Release over the second circle and the line becomes permanent.
 - **Delete a connection**: click on the line.
 - **Delete a circle**: right-click it (also removes any lines touching it).
 
