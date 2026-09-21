@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 
 const CIRCLE_R = 34
+const DOT_R = 5
+const HIT_SLOP = 6 // extra grab radius when releasing on a dot
 
 export default function App() {
   const [circles, setCircles] = useState([])
@@ -40,8 +42,8 @@ export default function App() {
     setCircles(cs => [...cs, { id: nextId('c'), x, y }])
   }
 
-  // ---- Manually draw a line: drag from one circle to another ----
-  function handleCircleMouseDown(e, c) {
+  // ---- Manually draw a line: drag from one dot to another dot ----
+  function handleDotMouseDown(e, c) {
     e.stopPropagation()
     e.preventDefault()
     const { x, y } = clientToSvg(e.clientX, e.clientY)
@@ -60,16 +62,20 @@ export default function App() {
     setGhostLine(null)
     if (!g) return
     const { x, y } = clientToSvg(e.clientX, e.clientY)
+
+    // Release must land on another circle's dot (the dot is at the center)
     const target = circlesRef.current.find(
-      c => c.id !== g.fromId && Math.hypot(c.x - x, c.y - y) <= CIRCLE_R
+      c => c.id !== g.fromId && Math.hypot(c.x - x, c.y - y) <= DOT_R + HIT_SLOP
     )
     if (!target) return
+
     const dup = connectionsRef.current.find(
       cn =>
         (cn.from === g.fromId && cn.to === target.id) ||
         (cn.from === target.id && cn.to === g.fromId)
     )
     if (dup) return
+
     setConnections(cs => [...cs, { id: nextId('conn'), from: g.fromId, to: target.id }])
   }
 
@@ -96,7 +102,7 @@ export default function App() {
       >
         <strong style={{ fontSize: 15 }}>Drag &amp; Connect Circles</strong>
         <span style={{ fontSize: 12, color: '#666' }}>
-          Drag circles from the column onto the workspace. Then drag from one circle to another to draw a line between them.
+          Drag circles from the column onto the workspace. Then drag from the dot on one circle to the dot on another to draw a line.
         </span>
       </header>
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
@@ -154,7 +160,7 @@ export default function App() {
               textAlign: 'center',
             }}
           >
-            Drag onto the workspace to add a circle. Do it twice, then drag from one circle to the other to draw a line.
+            Drag onto the workspace to add a circle. Do it twice, then drag from the dot on one circle to the dot on the other.
           </p>
         </aside>
         <svg
@@ -163,7 +169,24 @@ export default function App() {
           onDragOver={handleCanvasDragOver}
           onDrop={handleCanvasDrop}
         >
-          {/* Existing connections */}
+          {/* Pass 1: circle bodies (behind lines) */}
+          {circles.map(c => (
+            <circle
+              key={`body-${c.id}`}
+              cx={c.x}
+              cy={c.y}
+              r={CIRCLE_R}
+              fill="#378ADD"
+              stroke="#1f6ab8"
+              strokeWidth={2}
+              onContextMenu={e => {
+                e.preventDefault()
+                deleteCircle(c.id)
+              }}
+            />
+          ))}
+
+          {/* Pass 2: connections — drawn on top of circles so the line visibly runs dot-to-dot */}
           {connections.map(conn => {
             const from = circles.find(c => c.id === conn.from)
             const to = circles.find(c => c.id === conn.to)
@@ -175,7 +198,7 @@ export default function App() {
                 y1={from.y}
                 x2={to.x}
                 y2={to.y}
-                stroke="#378ADD"
+                stroke="#0d3b6b"
                 strokeWidth={2.5}
                 style={{ cursor: 'pointer' }}
                 onClick={e => {
@@ -200,24 +223,20 @@ export default function App() {
             />
           )}
 
-          {/* Circles */}
+          {/* Pass 3: dots — always on top, so line endpoints visibly land on them */}
           {circles.map(c => {
-            const drawingFrom = ghostLine?.fromId === c.id
+            const isSource = ghostLine?.fromId === c.id
             return (
               <circle
-                key={c.id}
+                key={`dot-${c.id}`}
                 cx={c.x}
                 cy={c.y}
-                r={CIRCLE_R}
-                fill="#378ADD"
-                stroke={drawingFrom ? '#f4a300' : '#1f6ab8'}
-                strokeWidth={drawingFrom ? 4 : 2}
+                r={DOT_R}
+                fill={isSource ? '#f4a300' : '#0d3b6b'}
+                stroke="#fff"
+                strokeWidth={1.5}
                 style={{ cursor: 'crosshair' }}
-                onMouseDown={e => handleCircleMouseDown(e, c)}
-                onContextMenu={e => {
-                  e.preventDefault()
-                  deleteCircle(c.id)
-                }}
+                onMouseDown={e => handleDotMouseDown(e, c)}
               />
             )
           })}
