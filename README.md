@@ -1,34 +1,28 @@
-# Drag & Connect Circles
+# Robokido IDE
 
-A minimal drag-and-connect workspace built with Vite + React 18.
-
-Drag the circle from the left column onto the workspace, then drag from a placed
-circle's right dot to another circle to connect them with a line.
-
-## Run it
+Drag-and-drop programming for the Robokido humanoid robot. React + Vite.
 
 ```
 npm install
 npm run dev
 ```
 
-Then open the local URL Vite prints (usually http://localhost:5173).
+Then open http://localhost:5173.
 
-## What it does
+## What's in it
 
-- **Column (left)**: a single reusable "Circle" item.
-- **Workspace (right)**: an SVG canvas where dropped circles live.
-- **Drag & drop** the Circle from the column onto the workspace to place a new circle. Do it twice to have two.
-- **Move** a placed circle by dragging its body.
-- **Connect two circles**: press-and-hold on the first circle and drag the pointer to the second one — a dashed orange line follows your cursor while you drag. Release over the second circle and the line becomes permanent.
-- **Delete a connection**: click on the line.
-- **Delete a circle**: right-click it (also removes any lines touching it).
+- Motion and control block palettes on the left.
+- A working space with Divisions (one per robot) and Subdivisions (reusable sequences of blocks).
+- A Debug / IDE panel showing live logs or the serialized JSON payload.
+- A Preview with a stick humanoid that acts out the program; a Mission mode drops an apple and a house on the stage and tracks a three-step objective.
+- Settings for robot list and backend endpoint. Programs save to localStorage.
 
-That is intentionally the whole feature set.
+## Layout
 
-## Files
+- `src/App.jsx` — most of the app.
+- `src/PreviewModal.jsx` — the preview + mission.
+- `src/preview.js` — pose model, timeline flattening, duration scaling.
+- `src/blocks.js` — motion and control block definitions.
+- `src/index.css` — styles.
 
-- `src/App.jsx` — the whole app (state, event handlers, and JSX in one component).
-- `src/main.jsx` — Vite/React entry point.
-- `src/index.css` — a handful of resets.
-- `index.html` — Vite's HTML shell.
+Not wired to a real robot yet. The backend endpoint field in Settings is where you'd POST to.
