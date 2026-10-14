@@ -27,7 +27,6 @@ function walk(blocks, subName, out) {
       out.push({ subName, kind: 'motion', block: b, label: b.type })
       continue
     }
-    // control
     switch (b.type) {
       case 'Repeat': {
         const n = Math.max(1, Math.min(50, Number(b.params?.times) || 1))

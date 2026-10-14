@@ -257,14 +257,11 @@ function RobotFigure({ pose, mission }) {
 
   return (
     <svg viewBox={`0 0 ${stageW} ${stageH}`} className="rk-robot-svg">
-      {/* Ground line + shadow */}
       <line x1="0" y1={stageH - 10} x2={stageW} y2={stageH - 10} stroke="rgba(0,0,0,0.12)" strokeWidth="1" />
       <ellipse cx={px} cy={stageH - 12} rx="50" ry="5" fill="rgba(0,0,0,0.15)" />
 
-      {/* Mission props */}
       {mission && (
         <>
-          {/* House */}
           <g className="rk-prop">
             <rect x={houseX - 32} y={stageH - 70} width="64" height="60" fill="#fde68a" stroke="#92400e" strokeWidth="2" />
             <polygon points={`${houseX - 40},${stageH - 70} ${houseX},${stageH - 105} ${houseX + 40},${stageH - 70}`} fill="#b45309" stroke="#78350f" strokeWidth="2" />
@@ -273,7 +270,6 @@ function RobotFigure({ pose, mission }) {
             <text x={houseX} y={stageH - 112} textAnchor="middle" fontSize="11" fill="#92400e" fontWeight="700">HOME</text>
           </g>
 
-          {/* Apple */}
           <g className="rk-prop rk-apple">
             <circle cx={appleX} cy={appleY} r="12" fill="#dc2626" stroke="#7f1d1d" strokeWidth="2" />
             <ellipse cx={appleX - 4} cy={appleY - 5} rx="3" ry="2" fill="#fca5a5" />

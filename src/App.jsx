@@ -142,7 +142,6 @@ export default function App() {
     }))
   }
 
-  // Add a block (motion or control) into the currently-active subdivision.
   function addBlockToActive(block) {
     if (!activeDivision || !activeSubdivision) {
       log('Pick a subdivision first.', 'warn')
@@ -155,7 +154,6 @@ export default function App() {
   }
 
   function updateBlock(path, patch) {
-    // path = { divisionId, subId, indexes: [i, j, ...] } (nested through control containers)
     setProgram(p => ({
       ...p,
       divisions: p.divisions.map(d => d.id !== path.divisionId ? d : {
@@ -204,7 +202,6 @@ export default function App() {
         const touchesFrom = d.id === fromDivisionId
         const touchesTo   = d.id === toDivisionId
         if (!touchesFrom && !touchesTo) return d
-        // Extract the block from the source subdivision (within this division).
         let extracted = null
         let subs = d.subdivisions.map(s => {
           if (s.id !== fromSubId) return s
@@ -213,11 +210,7 @@ export default function App() {
           return { ...s, blocks: res.blocks }
         })
         if (!extracted) return d
-        // Prevent dropping a container block into one of its own descendants.
-        if (toContainerId && isInSubtree(extracted, toContainerId)) {
-          return d // no-op; drop was invalid
-        }
-        // Insert into target subdivision (which may be the same one).
+        if (toContainerId && isInSubtree(extracted, toContainerId)) return d
         subs = subs.map(s => {
           if (s.id !== toSubId) return s
           if (!toContainerId) return { ...s, blocks: [...s.blocks, extracted] }
@@ -244,7 +237,6 @@ export default function App() {
   function handleSend() {
     const payload = serializeProgram(program)
     const json = JSON.stringify(payload, null, 2)
-    // Copy to clipboard if available, else just log.
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(json).catch(() => {})
     }
@@ -612,7 +604,7 @@ function Division(props) {
           <div className="rk-editor-head">
             <h4>Editing: <em>{activeSub.name}</em></h4>
             <span className="rk-editor-hint">
-              Click a palette block to add. Drag an existing block onto a container's dashed area to nest it, or into empty space to move it out.
+              Click a palette block to add it. Drag blocks between subdivisions or into a container to nest.
             </span>
           </div>
           <SubdivisionEditor
@@ -705,7 +697,6 @@ function SubdivisionChip({ sub, isActive, locked, onSelect, onRename, onAppend, 
 function SubdivisionEditor({ divisionId, subdivision, onUpdateBlock, onRemoveBlock, onAddChildBlock, onMoveBlock, onAppendBlock, locked }) {
   function onDrop(e) {
     e.preventDefault()
-    // Existing block being moved out to top-level?
     const moveRaw = e.dataTransfer.getData('application/x-rk-move')
     if (moveRaw) {
       try {
@@ -717,7 +708,6 @@ function SubdivisionEditor({ divisionId, subdivision, onUpdateBlock, onRemoveBlo
       } catch {}
       return
     }
-    // Fresh block from the palette.
     const raw = e.dataTransfer.getData('application/x-rk-block')
     if (!raw) return
     try {
@@ -779,12 +769,11 @@ function BlockNode({ block, path, onUpdateBlock, onRemoveBlock, onAddChildBlock,
   function onDropChild(e) {
     e.preventDefault()
     e.stopPropagation()
-    // Existing block being moved INTO this container.
     const moveRaw = e.dataTransfer.getData('application/x-rk-move')
     if (moveRaw) {
       try {
         const { fromDivisionId, fromSubId, blockId } = JSON.parse(moveRaw)
-        if (blockId === block.id) return // can't drop into self
+        if (blockId === block.id) return
         onMoveBlock?.({
           fromDivisionId, fromSubId, blockId,
           toDivisionId: path.divisionId, toSubId: path.subId, toContainerId: block.id,
@@ -792,7 +781,6 @@ function BlockNode({ block, path, onUpdateBlock, onRemoveBlock, onAddChildBlock,
       } catch {}
       return
     }
-    // Fresh block from the palette.
     const raw = e.dataTransfer.getData('application/x-rk-block')
     if (!raw) return
     try {
@@ -891,7 +879,6 @@ function ParamsEditor({ params, onChange, locked }) {
             </label>
           )
         }
-        // Generic text / numeric params on control blocks (condition, times, iterator, …)
         const asText = typeof params[k] === 'string'
         return (
           <label key={k} className="rk-param">
@@ -1007,7 +994,7 @@ function SettingsModal({ robots, onClose, onSave }) {
             value={endpoint}
             onChange={e => setEndpoint(e.target.value)}
           />
-          <p className="rk-hint">Tell us where your robot lives on the network and we'll deliver your programs straight to it when you hit SEND. Leave it blank and we'll pop the code onto your clipboard instead — great for testing.</p>
+          <p className="rk-hint">If set, SEND will POST the program here. If blank, SEND copies the JSON to the clipboard instead.</p>
         </section>
 
         <footer className="rk-modal-foot">
@@ -1024,7 +1011,6 @@ function cloneBlockDef(def) {
   if (def.kind === 'motion') {
     return { id, kind: 'motion', type: def.type, params: paramsForMotion(def.type) }
   }
-  // control
   return {
     id, kind: 'control', type: def.type,
     container: !!def.container,
@@ -1132,7 +1118,6 @@ function serializeBlock(b) {
     if (b.params.direction)       node.Direction = b.params.direction
     return node
   }
-  // control
   const node = { Control: b.type, ...b.params }
   if (b.container) node.Body = (b.children || []).map(serializeBlock)
   return node
