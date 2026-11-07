@@ -19,7 +19,7 @@ const emptyProgram = () => ({
 })
 
 const LS_KEY = 'robokido-ide:v1'
-const DEFAULT_ENDPOINT = 'http://localhost:4000/'
+const DEFAULT_ENDPOINT = 'https://sparkboard-cudc.onrender.com/'
 
 function loadEndpoint() {
   try {
