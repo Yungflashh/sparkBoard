@@ -623,6 +623,7 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 }
 .rk-log-send { background: var(--success-soft); }
 .rk-log-warn { background: var(--warning-soft); }
+.rk-log-error { background: var(--danger-soft); }
 .rk-log-empty {
   color: var(--fg-muted); font-style: italic;
   padding: 20px; text-align: center;

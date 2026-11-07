@@ -19,6 +19,14 @@ const emptyProgram = () => ({
 })
 
 const LS_KEY = 'robokido-ide:v1'
+const DEFAULT_ENDPOINT = 'http://localhost:4000/'
+
+function loadEndpoint() {
+  try {
+    const saved = localStorage.getItem('robokido:endpoint')
+    return saved === null ? DEFAULT_ENDPOINT : saved
+  } catch { return DEFAULT_ENDPOINT }
+}
 
 function loadProgram() {
   try {
@@ -44,6 +52,7 @@ export default function App() {
     { t: Date.now(), kind: 'info', msg: 'Robokido IDE ready.' },
   ])
   const [running, setRunning] = useState(false)
+  const sendAbort = useRef(null)
 
   useEffect(() => {
     try { localStorage.setItem(LS_KEY, JSON.stringify(program)) } catch {}
@@ -230,20 +239,55 @@ export default function App() {
   }
 
   function handleStop() {
+    sendAbort.current?.abort()
     setRunning(false)
     log('STOP: all robots halted.', 'warn')
   }
 
-  function handleSend() {
+  async function handleSend() {
     const payload = serializeProgram(program)
     const json = JSON.stringify(payload, null, 2)
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(json).catch(() => {})
-    }
-    log(`SEND: ${payload.divisions.length} division(s), ${payload.divisions.reduce((n, d) => n + d.sequence.length, 0)} step(s). JSON copied.`, 'send')
-    setRunning(true)
-    setTimeout(() => setRunning(false), 1500)
+    const steps = payload.divisions.reduce((n, d) => n + d.sequence.length, 0)
+    const summary = `${payload.divisions.length} division(s), ${steps} step(s)`
+    const endpoint = loadEndpoint().trim()
     console.log('[Robokido SEND payload]', payload)
+
+    if (!endpoint) {
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(json).catch(() => {})
+      }
+      log(`SEND: ${summary}. No backend set, so the JSON was copied instead.`, 'send')
+      setRunning(true)
+      setTimeout(() => setRunning(false), 1500)
+      return
+    }
+
+    sendAbort.current?.abort()
+    const ctrl = new AbortController()
+    sendAbort.current = ctrl
+    setRunning(true)
+    log(`SEND: ${summary} → ${endpoint}`, 'send')
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: json,
+        signal: ctrl.signal,
+      })
+      if (!res.ok) throw new Error(`backend replied ${res.status} ${res.statusText}`)
+      log('Backend got the program.', 'info')
+      const mail = res.headers.get('X-Mail-Status')
+      if (mail === 'sent') log('Emailed a copy of the program.', 'send')
+      if (mail === 'failed') log('Email copy failed. Check the backend terminal for why.', 'warn')
+    } catch (err) {
+      if (err.name === 'AbortError') return
+      log(`Couldn't reach the backend (${err.message}). Is it running? Try "npm run backend".`, 'error')
+    } finally {
+      if (sendAbort.current === ctrl) {
+        sendAbort.current = null
+        setRunning(false)
+      }
+    }
   }
 
   function handleRobotsUpdate(robots) {
@@ -951,7 +995,7 @@ function BottomBar({ zoom, setZoom, locked, setLocked }) {
 
 function SettingsModal({ robots, onClose, onSave }) {
   const [draft, setDraft] = useState(robots)
-  const [endpoint, setEndpoint] = useState(() => localStorage.getItem('robokido:endpoint') || '')
+  const [endpoint, setEndpoint] = useState(loadEndpoint)
 
   function addRobot() {
     setDraft(d => [...d, { id: uid('robot'), name: `Robot ${d.length + 1}` }])
@@ -990,11 +1034,11 @@ function SettingsModal({ robots, onClose, onSave }) {
           <h4>Backend endpoint</h4>
           <input
             className="rk-endpoint"
-            placeholder="https://robot.local/send"
+            placeholder={DEFAULT_ENDPOINT}
             value={endpoint}
             onChange={e => setEndpoint(e.target.value)}
           />
-          <p className="rk-hint">If set, SEND will POST the program here. If blank, SEND copies the JSON to the clipboard instead.</p>
+          <p className="rk-hint">If set, SEND will POST the program here. If blank, SEND copies the JSON to the clipboard instead. The local backend runs at {DEFAULT_ENDPOINT}</p>
         </section>
 
         <footer className="rk-modal-foot">
