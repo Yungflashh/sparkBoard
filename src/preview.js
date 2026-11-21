@@ -1,3 +1,5 @@
+import { isVar, formatValue, formatCondition } from './blocks.js'
+
 export function defaultPose() {
   return {
     x: 0, y: 0, bodyRot: 0,
@@ -13,24 +15,41 @@ export function defaultPose() {
 
 export function flattenSequence(division) {
   const steps = []
+  const vars = {}
   for (const subId of division.sequence) {
     const sub = division.subdivisions.find(s => s.id === subId)
     if (!sub) continue
-    walk(sub.blocks, sub.name, steps)
+    walk(sub.blocks, sub.name, steps, vars)
   }
   return steps
 }
 
-function walk(blocks, subName, out) {
+const resolve = (v, vars) => isVar(v) ? vars[v.var] : v
+
+function resolveParams(params, vars) {
+  const out = {}
+  for (const [k, v] of Object.entries(params || {})) out[k] = resolve(v, vars)
+  return out
+}
+
+function walk(blocks, subName, out, vars) {
   for (const b of blocks) {
     if (b.kind === 'motion') {
-      out.push({ subName, kind: 'motion', block: b, label: b.type })
+      out.push({ subName, kind: 'motion', block: { ...b, params: resolveParams(b.params, vars) }, label: b.type })
       continue
     }
     switch (b.type) {
+      case 'Set': {
+        const name = b.params?.variable
+        const val = resolve(b.params?.value, vars)
+        if (name) vars[name] = val
+        const shown = isVar(b.params?.value) ? `${formatValue(b.params.value)} (${val ?? 'unset'})` : formatValue(val)
+        out.push({ subName, kind: 'note', block: b, label: `Set ${name || '?'} = ${shown}` })
+        break
+      }
       case 'Repeat': {
-        const n = Math.max(1, Math.min(50, Number(b.params?.times) || 1))
-        for (let i = 0; i < n; i++) walk(b.children || [], subName, out)
+        const n = Math.max(1, Math.min(50, Number(resolve(b.params?.times, vars)) || 1))
+        for (let i = 0; i < n; i++) walk(b.children || [], subName, out, vars)
         break
       }
       case 'If':
@@ -38,12 +57,13 @@ function walk(blocks, subName, out) {
       case 'Else':
       case 'While':
       case 'For':
+        if (b.type === 'For' && b.params?.iterator) vars[b.params.iterator] = resolve(b.params.from, vars)
         out.push({ subName, kind: 'note', block: b, label: `${b.type}  (preview runs body once)` })
-        walk(b.children || [], subName, out)
+        walk(b.children || [], subName, out, vars)
         break
       case 'WaitUntil':
       case 'StopUntil':
-        out.push({ subName, kind: 'wait', block: b, label: `${b.type}: ${b.params?.condition || '…'}` })
+        out.push({ subName, kind: 'wait', block: b, label: `${b.type}: ${formatCondition(b.params?.condition) || '…'}` })
         break
       default:
         out.push({ subName, kind: 'note', block: b, label: b.type })

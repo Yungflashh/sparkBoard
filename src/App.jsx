@@ -4,7 +4,11 @@ import {
   CONTROL_BLOCKS,
   PARAM_RANGES,
   DIRECTIONS,
+  OPERATORS,
   paramsForMotion,
+  isVar,
+  cleanVarName,
+  parseCondition,
 } from './blocks.js'
 import PreviewModal from './PreviewModal.jsx'
 
@@ -33,8 +37,48 @@ function loadProgram() {
     const raw = localStorage.getItem(LS_KEY)
     if (!raw) return emptyProgram()
     const p = JSON.parse(raw)
-    return p && p.divisions ? p : emptyProgram()
+    if (!p || !p.divisions || !p.robots?.length) return emptyProgram()
+    return migrate(p)
   } catch { return emptyProgram() }
+}
+
+// Saves from before divisions belonged to a robot, and before conditions were structured.
+function migrate(p) {
+  const robotIds = new Set(p.robots.map(r => r.id))
+  const fixBlocks = blocks => blocks.map(b => {
+    const params = { ...(b.params || {}) }
+    if (typeof params.condition === 'string') params.condition = parseCondition(params.condition)
+    return { ...b, params, children: b.children ? fixBlocks(b.children) : b.children }
+  })
+  return {
+    ...p,
+    divisions: p.divisions.map(d => ({
+      ...d,
+      robotId: robotIds.has(d.robotId) ? d.robotId : p.robots[0].id,
+      subdivisions: d.subdivisions.map(s => ({ ...s, blocks: fixBlocks(s.blocks) })),
+    })),
+  }
+}
+
+// "Division 3" -> next is "Division 4", even if Division 1 was deleted.
+function nextName(prefix, names) {
+  const re = new RegExp(`^${prefix}\\s*(\\d+)$`, 'i')
+  const max = names.reduce((m, n) => {
+    const hit = re.exec(n || '')
+    return hit ? Math.max(m, Number(hit[1])) : m
+  }, 0)
+  return `${prefix} ${max + 1}`
+}
+
+function collectVariables(program) {
+  const names = new Set()
+  const walk = blocks => blocks.forEach(b => {
+    if (b.type === 'Set' && b.params?.variable) names.add(b.params.variable)
+    if (b.type === 'For' && b.params?.iterator) names.add(b.params.iterator)
+    if (b.children) walk(b.children)
+  })
+  program.divisions.forEach(d => d.subdivisions.forEach(s => walk(s.blocks)))
+  return [...names].sort()
 }
 
 export default function App() {
@@ -65,24 +109,22 @@ export default function App() {
     setDebugLog(l => [...l.slice(-199), { t: Date.now(), kind, msg }])
   }
 
-  function addDivision() {
+  function addDivision(robotId) {
+    const robot = program.robots.find(r => r.id === robotId)
+    if (!robot) return
     const id = uid('div')
-    const robotId = program.robots[0]?.id || null
     const sub = { id: uid('sub'), name: 'Sub 1', blocks: [] }
+    const name = nextName('Division', program.divisions.filter(d => d.robotId === robotId).map(d => d.name))
     setProgram(p => ({
       ...p,
       divisions: [
         ...p.divisions,
-        {
-          id, name: `Division ${p.divisions.length + 1}`, robotId,
-          subdivisions: [sub],
-          sequence: [sub.id],
-        },
+        { id, name, robotId, subdivisions: [sub], sequence: [sub.id] },
       ],
     }))
     setActiveDivisionId(id)
     setActiveSubdivisionId(sub.id)
-    log(`Added ${`Division ${program.divisions.length + 1}`}`)
+    log(`Added ${name} to ${robot.name}`)
   }
 
   function updateDivision(id, patch) {
@@ -104,7 +146,7 @@ export default function App() {
       ...p,
       divisions: p.divisions.map(d => {
         if (d.id !== divisionId) return d
-        sub.name = `Sub ${d.subdivisions.length + 1}`
+        sub.name = nextName('Sub', d.subdivisions.map(s => s.name))
         return { ...d, subdivisions: [...d.subdivisions, sub] }
       }),
     }))
@@ -247,8 +289,8 @@ export default function App() {
   async function handleSend() {
     const payload = serializeProgram(program)
     const json = JSON.stringify(payload, null, 2)
-    const steps = payload.divisions.reduce((n, d) => n + d.sequence.length, 0)
-    const summary = `${payload.divisions.length} division(s), ${steps} step(s)`
+    const steps = program.divisions.reduce((n, d) => n + d.sequence.length, 0)
+    const summary = `${payload.robots.length} robot(s), ${program.divisions.length} division(s), ${steps} step(s)`
     const endpoint = loadEndpoint().trim()
     console.log('[Robokido SEND payload]', payload)
 
@@ -291,11 +333,25 @@ export default function App() {
   }
 
   function handleRobotsUpdate(robots) {
-    setProgram(p => ({ ...p, robots }))
+    const keep = new Set(robots.map(r => r.id))
+    const dropped = program.divisions.filter(d => !keep.has(d.robotId))
+    if (dropped.length && !confirm(`Removing a robot also deletes its ${dropped.length} division(s). Continue?`)) {
+      return false
+    }
+    setProgram(p => ({ ...p, robots, divisions: p.divisions.filter(d => keep.has(d.robotId)) }))
+    if (dropped.some(d => d.id === activeDivisionId)) {
+      setActiveDivisionId(null); setActiveSubdivisionId(null)
+    }
+    return true
   }
+
+  const variables = useMemo(() => collectVariables(program), [program])
 
   return (
     <div className="rk-root" data-locked={locked}>
+      <datalist id="rk-vars">
+        {variables.map(v => <option key={v} value={v} />)}
+      </datalist>
       <TopBar
         onClear={handleClear}
         onStop={handleStop}
@@ -512,57 +568,66 @@ function Canvas(props) {
         className="rk-canvas"
         style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
       >
-        {program.divisions.length === 0 && (
-          <EmptyCanvas onAdd={onAddDivision} />
-        )}
+        {program.divisions.length === 0 && <EmptyCanvas />}
 
-        {program.divisions.map(div => (
-          <Division
-            key={div.id}
-            division={div}
-            robots={program.robots}
-            isActive={activeDivisionId === div.id}
-            activeSubdivisionId={activeDivisionId === div.id ? activeSubdivisionId : null}
-            onFocus={() => setActiveDivisionId(div.id)}
-            onPatch={patch => onUpdateDivision(div.id, patch)}
-            onRemove={() => onRemoveDivision(div.id)}
-            onAddSub={() => onAddSubdivision(div.id)}
-            onPatchSub={(subId, patch) => onUpdateSubdivision(div.id, subId, patch)}
-            onRemoveSub={(subId) => onRemoveSubdivision(div.id, subId)}
-            onSelectSub={(subId) => { setActiveDivisionId(div.id); setActiveSubdivisionId(subId) }}
-            onAppendToSequence={(subId) => onAppendToSequence(div.id, subId)}
-            onRemoveFromSequence={(index) => onRemoveFromSequence(div.id, index)}
-            onUpdateBlock={onUpdateBlock}
-            onRemoveBlock={onRemoveBlock}
-            onAddChildBlock={onAddChildBlock}
-            onMoveBlock={onMoveBlock}
-            locked={locked}
-          />
-        ))}
-
-        {program.divisions.length > 0 && !locked && (
-          <button className="rk-btn rk-add-division" onClick={onAddDivision}>
-            + Division
-          </button>
-        )}
+        {program.robots.map(robot => {
+          const divisions = program.divisions.filter(d => d.robotId === robot.id)
+          return (
+            <section key={robot.id} className="rk-robot-group">
+              <header className="rk-robot-head">
+                <span className="rk-robot-icon">🤖</span>
+                <h3>{robot.name}</h3>
+                <span className="rk-robot-count">
+                  {divisions.length} division{divisions.length === 1 ? '' : 's'}
+                </span>
+              </header>
+              {divisions.map(div => (
+                <Division
+                  key={div.id}
+                  division={div}
+                  isActive={activeDivisionId === div.id}
+                  activeSubdivisionId={activeDivisionId === div.id ? activeSubdivisionId : null}
+                  onFocus={() => setActiveDivisionId(div.id)}
+                  onPatch={patch => onUpdateDivision(div.id, patch)}
+                  onRemove={() => onRemoveDivision(div.id)}
+                  onAddSub={() => onAddSubdivision(div.id)}
+                  onPatchSub={(subId, patch) => onUpdateSubdivision(div.id, subId, patch)}
+                  onRemoveSub={(subId) => onRemoveSubdivision(div.id, subId)}
+                  onSelectSub={(subId) => { setActiveDivisionId(div.id); setActiveSubdivisionId(subId) }}
+                  onAppendToSequence={(subId) => onAppendToSequence(div.id, subId)}
+                  onRemoveFromSequence={(index) => onRemoveFromSequence(div.id, index)}
+                  onUpdateBlock={onUpdateBlock}
+                  onRemoveBlock={onRemoveBlock}
+                  onAddChildBlock={onAddChildBlock}
+                  onMoveBlock={onMoveBlock}
+                  locked={locked}
+                />
+              ))}
+              {!locked && (
+                <button className="rk-btn rk-add-division" onClick={() => onAddDivision(robot.id)}>
+                  + Division for {robot.name}
+                </button>
+              )}
+            </section>
+          )
+        })}
       </div>
     </section>
   )
 }
 
-function EmptyCanvas({ onAdd }) {
+function EmptyCanvas() {
   return (
     <div className="rk-empty-canvas">
       <h2>Working Space</h2>
-      <p>Create a Division to begin. Each Division runs on one humanoid robot. Subdivisions chain in sequence (e.g. Sub 1 → Sub 3 → Sub 1).</p>
-      <button className="rk-btn rk-btn-primary rk-btn-big" onClick={onAdd}>+ Add first Division</button>
+      <p>Every robot gets its own Division 1, Division 2, … and every Division has its own Sub 1, Sub 2, … Subdivisions chain in sequence (e.g. Sub 1 → Sub 3 → Sub 1). Add robots in Settings.</p>
     </div>
   )
 }
 
 function Division(props) {
   const {
-    division, robots, isActive, activeSubdivisionId,
+    division, isActive, activeSubdivisionId,
     onFocus, onPatch, onRemove, onAddSub, onPatchSub, onRemoveSub,
     onSelectSub, onAppendToSequence, onRemoveFromSequence,
     onUpdateBlock, onRemoveBlock, onAddChildBlock, onMoveBlock, locked,
@@ -584,16 +649,6 @@ function Division(props) {
           onChange={e => onPatch({ name: e.target.value })}
           disabled={locked}
         />
-        <label className="rk-robot-pick">
-          <span>Robot:</span>
-          <select
-            value={division.robotId || ''}
-            onChange={e => onPatch({ robotId: e.target.value })}
-            disabled={locked}
-          >
-            {robots.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-          </select>
-        </label>
         {!locked && (
           <button className="rk-icon-btn" onClick={onRemove} title="Remove division">×</button>
         )}
@@ -897,46 +952,111 @@ function ParamsEditor({ params, onChange, locked }) {
   return (
     <div className="rk-params">
       {keys.map(k => {
+        const v = params[k]
         if (k === 'direction') {
           return (
             <label key={k} className="rk-param">
               <span>Direction</span>
-              <select value={params[k]} onChange={e => onChange(k, e.target.value)} disabled={locked}>
+              <select value={v} onChange={e => onChange(k, e.target.value)} disabled={locked}>
                 {DIRECTIONS.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
             </label>
           )
         }
-        const range = PARAM_RANGES[k]
-        if (range) {
+        if (k === 'condition' && v && typeof v === 'object') {
+          return (
+            <div key={k} className="rk-param rk-param-cond">
+              <span>Condition</span>
+              <ValueInput value={v.left} onChange={left => onChange(k, { ...v, left })} locked={locked} />
+              <select className="rk-op" value={v.op} onChange={e => onChange(k, { ...v, op: e.target.value })} disabled={locked}>
+                {OPERATORS.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+              <ValueInput value={v.right} onChange={right => onChange(k, { ...v, right })} locked={locked} />
+            </div>
+          )
+        }
+        if (k === 'variable' || k === 'iterator') {
           return (
             <label key={k} className="rk-param">
               <span>{labelFor(k)}</span>
               <input
-                type="number"
-                min={range.min} max={range.max} step={range.step}
-                value={params[k]}
-                onChange={e => onChange(k, clamp(Number(e.target.value), range.min, range.max))}
+                type="text"
+                className="rk-var-name"
+                list="rk-vars"
+                placeholder="name"
+                value={v}
+                onChange={e => onChange(k, cleanVarName(e.target.value))}
                 disabled={locked}
               />
-              <small>{range.suffix}</small>
+              {k === 'variable' && <small>=</small>}
             </label>
           )
         }
-        const asText = typeof params[k] === 'string'
+        if (typeof v === 'number' || isVar(v)) {
+          const range = PARAM_RANGES[k]
+          return (
+            <div key={k} className="rk-param">
+              <span>{labelFor(k)}</span>
+              <ValueInput value={v} range={range} onChange={nv => onChange(k, nv)} locked={locked} />
+              {range && !isVar(v) && <small>{range.suffix}</small>}
+            </div>
+          )
+        }
         return (
           <label key={k} className="rk-param">
             <span>{labelFor(k)}</span>
-            <input
-              type={asText ? 'text' : 'number'}
-              value={params[k]}
-              onChange={e => onChange(k, asText ? e.target.value : Number(e.target.value))}
-              disabled={locked}
-            />
+            <input type="text" value={v} onChange={e => onChange(k, e.target.value)} disabled={locked} />
           </label>
         )
       })}
     </div>
+  )
+}
+
+// One slot that holds either a typed number or the name of another variable.
+// The little 123 / x button in front flips between the two.
+function ValueInput({ value, onChange, range, locked }) {
+  const asVar = isVar(value)
+  const lastNumber = useRef(asVar ? (range?.min ?? 0) : value)
+  if (!asVar) lastNumber.current = value
+
+  function toggle() {
+    onChange(asVar ? lastNumber.current : { var: '' })
+  }
+
+  return (
+    <span className={`rk-value ${asVar ? 'rk-value-var' : ''}`}>
+      <button
+        type="button"
+        className="rk-value-mode"
+        onClick={toggle}
+        disabled={locked}
+        title={asVar
+          ? 'Using a variable. Click to type a number instead.'
+          : 'Using a number. Click to use a variable (like W) instead.'}
+      >{asVar ? 'x' : '123'}</button>
+      {asVar ? (
+        <input
+          type="text"
+          list="rk-vars"
+          placeholder="name"
+          value={value.var}
+          onChange={e => onChange({ var: cleanVarName(e.target.value) })}
+          disabled={locked}
+        />
+      ) : (
+        <input
+          type="number"
+          min={range?.min} max={range?.max} step={range?.step}
+          value={value}
+          onChange={e => {
+            const n = Number(e.target.value)
+            onChange(range ? clamp(n, range.min, range.max) : n)
+          }}
+          disabled={locked}
+        />
+      )}
+    </span>
   )
 }
 
@@ -1007,7 +1127,8 @@ function SettingsModal({ robots, onClose, onSave }) {
     setDraft(d => d.filter(r => r.id !== id))
   }
   function save() {
-    onSave(draft.length ? draft : [{ id: 'robot-1', name: 'Robot 1' }])
+    const ok = onSave(draft.length ? draft : [{ id: 'robot-1', name: 'Robot 1' }])
+    if (ok === false) return
     try { localStorage.setItem('robokido:endpoint', endpoint) } catch {}
     onClose()
   }
@@ -1078,6 +1199,8 @@ function labelFor(key) {
     case 'iterator':  return 'Iterator'
     case 'from':      return 'From'
     case 'to':        return 'To'
+    case 'variable':  return 'Variable'
+    case 'value':     return 'Value'
     default: return key[0].toUpperCase() + key.slice(1)
   }
 }
@@ -1138,17 +1261,19 @@ function removeAtPath(blocks, indexes) {
 
 function serializeProgram(program) {
   return {
-    robots: program.robots,
-    divisions: program.divisions.map(d => ({
-      id: d.id,
-      name: d.name,
-      robot: program.robots.find(r => r.id === d.robotId)?.name || null,
-      subdivisions: d.subdivisions.map(s => ({
-        id: s.id,
-        name: s.name,
-        nodes: s.blocks.map(serializeBlock),
+    robots: program.robots.map(r => ({
+      id: r.id,
+      name: r.name,
+      divisions: program.divisions.filter(d => d.robotId === r.id).map(d => ({
+        id: d.id,
+        name: d.name,
+        subdivisions: d.subdivisions.map(s => ({
+          id: s.id,
+          name: s.name,
+          nodes: s.blocks.map(serializeBlock),
+        })),
+        sequence: d.sequence.map(id => d.subdivisions.find(s => s.id === id)?.name || id),
       })),
-      sequence: d.sequence.map(id => d.subdivisions.find(s => s.id === id)?.name || id),
     })),
   }
 }
@@ -1156,13 +1281,14 @@ function serializeProgram(program) {
 function serializeBlock(b) {
   if (b.kind === 'motion') {
     const node = { Motion: b.type }
-    if (b.params.time    != null) node.Time    = `${b.params.time} Sec`
-    if (b.params.speed   != null) node.Speed   = `${b.params.speed}%`
-    if (b.params.degree  != null) node.Degree  = `${b.params.degree} Deg`
+    const withUnit = (v, unit) => isVar(v) ? { var: v.var } : `${v}${unit}`
+    if (b.params.time    != null) node.Time    = withUnit(b.params.time, ' Sec')
+    if (b.params.speed   != null) node.Speed   = withUnit(b.params.speed, '%')
+    if (b.params.degree  != null) node.Degree  = withUnit(b.params.degree, ' Deg')
     if (b.params.direction)       node.Direction = b.params.direction
     return node
   }
-  const node = { Control: b.type, ...b.params }
+  const node = { Control: b.type, ...deepClone(b.params || {}) }
   if (b.container) node.Body = (b.children || []).map(serializeBlock)
   return node
 }

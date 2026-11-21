@@ -23,16 +23,17 @@ export function paramsForMotion(name) {
 }
 
 export const CONTROL_BLOCKS = [
+  { type: 'Set',          container: false, params: { variable: 'x', value: 0 } },
   { type: 'Repeat',       container: true,  params: { times: 3 } },
-  { type: 'WaitUntil',    container: false, params: { condition: 'sensor == true' } },
-  { type: 'StopUntil',    container: false, params: { condition: 'sensor == true' } },
+  { type: 'WaitUntil',    container: false, params: { condition: { left: { var: 'sensor' }, op: '==', right: 1 } } },
+  { type: 'StopUntil',    container: false, params: { condition: { left: { var: 'sensor' }, op: '==', right: 1 } } },
   { type: 'Break',        container: false, params: {} },
   { type: 'Continue',     container: false, params: {} },
   { type: 'Pass',         container: false, params: {} },
-  { type: 'If',           container: true,  params: { condition: 'x > 0' } },
-  { type: 'ElseIf',       container: true,  params: { condition: 'x == 0' } },
+  { type: 'If',           container: true,  params: { condition: { left: { var: 'x' }, op: '>',  right: 0 } } },
+  { type: 'ElseIf',       container: true,  params: { condition: { left: { var: 'x' }, op: '==', right: 0 } } },
   { type: 'Else',         container: true,  params: {} },
-  { type: 'While',        container: true,  params: { condition: 'x > 0' } },
+  { type: 'While',        container: true,  params: { condition: { left: { var: 'x' }, op: '>',  right: 0 } } },
   { type: 'For',          container: true,  params: { iterator: 'i', from: 0, to: 10 } },
 ]
 
@@ -43,3 +44,33 @@ export const PARAM_RANGES = {
 }
 
 export const DIRECTIONS = ['Forward', 'Backward', 'Left', 'Right']
+
+export const OPERATORS = ['==', '!=', '>', '<', '>=', '<=']
+
+// A value is either a plain number or { var: 'name' } pointing at a variable.
+export const isVar = v => v != null && typeof v === 'object' && 'var' in v
+
+export const cleanVarName = s => String(s).replace(/[^A-Za-z0-9_]/g, '').replace(/^[0-9]+/, '')
+
+export function formatValue(v) {
+  if (isVar(v)) return v.var || '?'
+  return String(v ?? '')
+}
+
+export function formatCondition(c) {
+  if (!c || typeof c !== 'object') return String(c ?? '')
+  return `${formatValue(c.left)} ${c.op} ${formatValue(c.right)}`
+}
+
+// Older saves stored conditions as free text like "x > 0".
+export function parseCondition(str) {
+  const m = /^\s*(\S+?)\s*(==|!=|>=|<=|>|<)\s*(\S+)\s*$/.exec(String(str))
+  if (!m) return { left: { var: 'x' }, op: '>', right: 0 }
+  const side = t => {
+    if (t === 'true') return 1
+    if (t === 'false') return 0
+    const n = Number(t)
+    return Number.isFinite(n) ? n : { var: cleanVarName(t) }
+  }
+  return { left: side(m[1]), op: m[2], right: side(m[3]) }
+}

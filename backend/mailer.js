@@ -3,7 +3,8 @@ const { RESEND_API_KEY, MAIL_FROM, MAIL_TO } = process.env;
 exports.mailEnabled = () => Boolean(RESEND_API_KEY && MAIL_FROM && MAIL_TO);
 
 exports.mailProgram = async (program) => {
-  const divisions = Array.isArray(program.divisions) ? program.divisions : [];
+  const robots = Array.isArray(program.robots) ? program.robots : [];
+  const divisions = robots.flatMap((r) => (Array.isArray(r.divisions) ? r.divisions : []));
   const steps = divisions.reduce((n, d) => n + (d.sequence?.length || 0), 0);
   const json = JSON.stringify(program, null, 2);
   const sentAt = new Date().toLocaleString();
@@ -17,7 +18,7 @@ exports.mailProgram = async (program) => {
     body: JSON.stringify({
       from: MAIL_FROM,
       to: MAIL_TO.split(",").map((s) => s.trim()),
-      subject: `Robokido SEND: ${divisions.length} division(s), ${steps} step(s)`,
+      subject: `Robokido SEND: ${robots.length} robot(s), ${divisions.length} division(s), ${steps} step(s)`,
       text: `Program sent from the Robokido IDE at ${sentAt}.\n\n${json}`,
       attachments: [
         {

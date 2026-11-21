@@ -119,7 +119,15 @@ export default function PreviewModal({ program, initialDivisionId, onClose }) {
                 onChange={e => setDivisionId(e.target.value)}
                 disabled={divisions.length < 2}
               >
-                {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                {program.robots.map(r => {
+                  const own = divisions.filter(d => d.robotId === r.id)
+                  if (own.length === 0) return null
+                  return (
+                    <optgroup key={r.id} label={r.name}>
+                      {own.map(d => <option key={d.id} value={d.id}>{r.name} · {d.name}</option>)}
+                    </optgroup>
+                  )
+                })}
               </select>
               <span className="rk-preview-robot">Robot: <strong>{robotName}</strong></span>
               <span className="rk-preview-count">{steps.length} step{steps.length === 1 ? '' : 's'}</span>

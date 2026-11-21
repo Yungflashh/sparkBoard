@@ -338,6 +338,27 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 }
 .rk-add-division:hover { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }
 
+/* Robot groups: each robot owns Division 1, Division 2, … */
+.rk-robot-group {
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: rgba(255, 255, 255, 0.55);
+  max-width: 1012px;
+}
+.rk-robot-head {
+  display: flex; align-items: center; gap: 10px;
+}
+.rk-robot-head h3 { font-size: 17px; font-weight: 700; margin: 0; color: var(--fg-primary); }
+.rk-robot-icon { font-size: 20px; }
+.rk-robot-count {
+  font-size: 11px; color: var(--fg-secondary);
+  background: var(--bg-sunken);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
 /* Division */
 .rk-division {
   background: var(--bg-surface);
@@ -582,6 +603,35 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 }
 .rk-param input[type="text"] { width: 160px; }
 .rk-param small { color: var(--fg-muted); }
+
+/* Number-or-variable slot */
+.rk-value {
+  display: inline-flex; align-items: stretch;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+.rk-param .rk-value input {
+  border: 0; border-radius: 0;
+  width: 64px;
+}
+.rk-param .rk-value input[type="text"] { width: 64px; font-family: var(--font-mono); }
+.rk-value-mode {
+  min-width: 30px;
+  padding: 0 6px;
+  border: 0;
+  border-right: 1px solid var(--border-strong);
+  background: var(--bg-sunken);
+  color: var(--fg-secondary);
+  font-size: 10px; font-weight: 700;
+  cursor: pointer;
+}
+.rk-value-mode:hover:not(:disabled) { background: var(--primary-soft); color: var(--primary); }
+.rk-value-var .rk-value-mode { background: var(--primary); color: var(--fg-inverse); font-family: var(--font-mono); font-size: 12px; }
+.rk-value-var { border-color: var(--primary); }
+.rk-param .rk-op { width: auto; }
+.rk-param input.rk-var-name { width: 80px; font-family: var(--font-mono); }
 
 .rk-children {
   margin-top: 8px;
