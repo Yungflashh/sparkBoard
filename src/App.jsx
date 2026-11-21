@@ -11,6 +11,8 @@ import {
   parseCondition,
 } from './blocks.js'
 import PreviewModal from './PreviewModal.jsx'
+import Info from './Info.jsx'
+import { HELP, PARAM_HELP, CONTROL_HELP, MOTION_HELP, blockHelp } from './help.js'
 
 const uid = (() => { let n = 1; return (p) => `${p}-${n++}` })()
 
@@ -460,6 +462,7 @@ function TopBar({ onClear, onStop, onSend, onPreview, onIDE, onSettings, onToggl
       <div className="rk-top-title">
         <span className="rk-logo">🤖</span>
         <span className="rk-brand">Robokido IDE</span>
+        <Info text={HELP.topBar} label="What do the buttons do?" />
         {running && <span className="rk-pill rk-pill-live">● SENDING</span>}
       </div>
       <div className="rk-top-right">
@@ -499,6 +502,7 @@ function Palette({ onPickMotion, onPickControl, mobileOpen, onCloseMobile }) {
           className={`rk-tab ${tab === 'controls' ? 'rk-tab-active' : ''}`}
           onClick={() => setTab('controls')}
         >controls</button>
+        <Info text={tab === 'motions' ? HELP.motions : HELP.controls} />
       </div>
 
       {tab === 'motions' && (
@@ -511,8 +515,8 @@ function Palette({ onPickMotion, onPickControl, mobileOpen, onCloseMobile }) {
           />
           <div className="rk-palette-list">
             {filteredMotions.map(name => (
+              <div key={name} className="rk-block-row">
               <button
-                key={name}
                 className="rk-block rk-block-motion"
                 draggable
                 onDragStart={e => e.dataTransfer.setData('application/x-rk-block', JSON.stringify({ kind: 'motion', type: name }))}
@@ -522,6 +526,8 @@ function Palette({ onPickMotion, onPickControl, mobileOpen, onCloseMobile }) {
                 <span className="rk-block-icon">🦿</span>
                 <span className="rk-block-label">{name}</span>
               </button>
+              <Info text={MOTION_HELP[name]} />
+              </div>
             ))}
             {filteredMotions.length === 0 && (
               <p className="rk-empty">No matches.</p>
@@ -533,8 +539,8 @@ function Palette({ onPickMotion, onPickControl, mobileOpen, onCloseMobile }) {
       {tab === 'controls' && (
         <div className="rk-palette-list">
           {CONTROL_BLOCKS.map(def => (
+            <div key={def.type} className="rk-block-row">
             <button
-              key={def.type}
               className="rk-block rk-block-control"
               draggable
               onDragStart={e => e.dataTransfer.setData('application/x-rk-block', JSON.stringify({ kind: 'control', type: def.type, params: def.params, container: def.container }))}
@@ -544,6 +550,8 @@ function Palette({ onPickMotion, onPickControl, mobileOpen, onCloseMobile }) {
               <span className="rk-block-icon">{def.container ? '⟳' : '•'}</span>
               <span className="rk-block-label">{def.type}</span>
             </button>
+            <Info text={CONTROL_HELP[def.type]} />
+            </div>
           ))}
         </div>
       )}
@@ -577,6 +585,7 @@ function Canvas(props) {
               <header className="rk-robot-head">
                 <span className="rk-robot-icon">🤖</span>
                 <h3>{robot.name}</h3>
+                <Info text={HELP.robot} />
                 <span className="rk-robot-count">
                   {divisions.length} division{divisions.length === 1 ? '' : 's'}
                 </span>
@@ -649,13 +658,14 @@ function Division(props) {
           onChange={e => onPatch({ name: e.target.value })}
           disabled={locked}
         />
+        <Info text={HELP.division} />
         {!locked && (
           <button className="rk-icon-btn" onClick={onRemove} title="Remove division">×</button>
         )}
       </header>
 
       <section className="rk-sub-row">
-        <h4>Subdivisions <span className="rk-hint-inline">— click to edit · double-click name to rename · → appends to sequence</span></h4>
+        <h4>Subdivisions <Info text={HELP.subdivisions} /> <span className="rk-hint-inline">click to edit · double-click name to rename · → adds to sequence</span></h4>
         <div className="rk-chips">
           {division.subdivisions.map(s => (
             <SubdivisionChip
@@ -676,7 +686,7 @@ function Division(props) {
       </section>
 
       <section className="rk-seq-row">
-        <h4>Sequence</h4>
+        <h4>Sequence <Info text={HELP.sequence} /></h4>
         <div className="rk-seq">
           {division.sequence.length === 0 && (
             <span className="rk-seq-empty">Click → on a subdivision to append.</span>
@@ -701,7 +711,7 @@ function Division(props) {
       {activeSub && (
         <section className="rk-editor">
           <div className="rk-editor-head">
-            <h4>Editing: <em>{activeSub.name}</em></h4>
+            <h4>Editing: <em>{activeSub.name}</em> <Info text={HELP.editor} /></h4>
             <span className="rk-editor-hint">
               Click a palette block to add it. Drag blocks between subdivisions or into a container to nest.
             </span>
@@ -908,6 +918,7 @@ function BlockNode({ block, path, onUpdateBlock, onRemoveBlock, onAddChildBlock,
           {isContainer ? (expanded ? '▾' : '▸') : '•'}
         </button>
         <span className="rk-node-type">{block.type}</span>
+        <Info text={blockHelp(block)} />
         {!locked && (
           <button className="rk-node-x" onClick={() => onRemoveBlock(path)} title="Remove">×</button>
         )}
@@ -949,24 +960,27 @@ function BlockNode({ block, path, onUpdateBlock, onRemoveBlock, onAddChildBlock,
 function ParamsEditor({ params, onChange, locked }) {
   const keys = Object.keys(params)
   if (keys.length === 0) return null
+  const tip = k => PARAM_HELP[k]
   return (
     <div className="rk-params">
       {keys.map(k => {
         const v = params[k]
         if (k === 'direction') {
           return (
-            <label key={k} className="rk-param">
+            <div key={k} className="rk-param">
               <span>Direction</span>
+              <Info text={tip(k)} />
               <select value={v} onChange={e => onChange(k, e.target.value)} disabled={locked}>
                 {DIRECTIONS.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
-            </label>
+            </div>
           )
         }
         if (k === 'condition' && v && typeof v === 'object') {
           return (
             <div key={k} className="rk-param rk-param-cond">
               <span>Condition</span>
+              <Info text={`${tip(k)} ${HELP.valueSwitch}`} />
               <ValueInput value={v.left} onChange={left => onChange(k, { ...v, left })} locked={locked} />
               <select className="rk-op" value={v.op} onChange={e => onChange(k, { ...v, op: e.target.value })} disabled={locked}>
                 {OPERATORS.map(o => <option key={o} value={o}>{o}</option>)}
@@ -977,8 +991,9 @@ function ParamsEditor({ params, onChange, locked }) {
         }
         if (k === 'variable' || k === 'iterator') {
           return (
-            <label key={k} className="rk-param">
+            <div key={k} className="rk-param">
               <span>{labelFor(k)}</span>
+              <Info text={tip(k)} />
               <input
                 type="text"
                 className="rk-var-name"
@@ -989,7 +1004,7 @@ function ParamsEditor({ params, onChange, locked }) {
                 disabled={locked}
               />
               {k === 'variable' && <small>=</small>}
-            </label>
+            </div>
           )
         }
         if (typeof v === 'number' || isVar(v)) {
@@ -997,16 +1012,18 @@ function ParamsEditor({ params, onChange, locked }) {
           return (
             <div key={k} className="rk-param">
               <span>{labelFor(k)}</span>
+              <Info text={tip(k) && `${tip(k)} ${HELP.valueSwitch}`} />
               <ValueInput value={v} range={range} onChange={nv => onChange(k, nv)} locked={locked} />
               {range && !isVar(v) && <small>{range.suffix}</small>}
             </div>
           )
         }
         return (
-          <label key={k} className="rk-param">
+          <div key={k} className="rk-param">
             <span>{labelFor(k)}</span>
+            <Info text={tip(k)} />
             <input type="text" value={v} onChange={e => onChange(k, e.target.value)} disabled={locked} />
-          </label>
+          </div>
         )
       })}
     </div>
@@ -1065,7 +1082,7 @@ function DebugPanel({ log, onClear, showIDE, onToggleIDE, mobileOpen, onCloseMob
   return (
     <aside className="rk-debug" data-open={mobileOpen || undefined}>
       <div className="rk-debug-head">
-        <h4>{showIDE ? 'IDE — JSON' : 'Debug'}</h4>
+        <h4>{showIDE ? 'IDE — JSON' : 'Debug'} <Info text={showIDE ? HELP.ideJson : HELP.debug} /></h4>
         <div style={{ display: 'flex', gap: 6 }}>
           <button className="rk-btn-small" onClick={onToggleIDE}>
             {showIDE ? 'Log' : 'IDE'}
@@ -1102,6 +1119,7 @@ function BottomBar({ zoom, setZoom, locked, setLocked }) {
       <span className="rk-zoom-val">{Math.round(zoom * 100)}%</span>
       <button className="rk-btn-small" onClick={() => setZoom(z => clamp(+(z + 0.1).toFixed(2), 0.4, 2))} aria-label="Zoom in">+</button>
       <button className="rk-btn-small" onClick={() => setZoom(1)}>Fit</button>
+      <Info text={HELP.zoom} />
       <span className="rk-bottom-spacer" />
       <button
         className={`rk-btn-small ${locked ? 'rk-btn-on' : ''}`}
@@ -1109,6 +1127,7 @@ function BottomBar({ zoom, setZoom, locked, setLocked }) {
       >
         {locked ? '🔒 Locked' : '🔓 Lock'}
       </button>
+      <Info text={HELP.lock} />
     </footer>
   )
 }
@@ -1139,7 +1158,7 @@ function SettingsModal({ robots, onClose, onSave }) {
         <h3>Settings</h3>
 
         <section>
-          <h4>Robots</h4>
+          <h4>Robots <Info text={HELP.robots} /></h4>
           <ul className="rk-robot-list">
             {draft.map(r => (
               <li key={r.id}>
@@ -1152,7 +1171,7 @@ function SettingsModal({ robots, onClose, onSave }) {
         </section>
 
         <section>
-          <h4>Backend endpoint</h4>
+          <h4>Backend endpoint <Info text={HELP.endpoint} /></h4>
           <input
             className="rk-endpoint"
             placeholder={DEFAULT_ENDPOINT}

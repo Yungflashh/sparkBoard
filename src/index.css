@@ -1084,3 +1084,62 @@ input:focus-visible, select:focus-visible, button:focus-visible {
   .rk-logo { width: 30px; height: 30px; }
   .rk-top .rk-btn { padding: 6px 10px; font-size: 11px; }
 }
+
+/* ⓘ info icons */
+.rk-info {
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px;
+  padding: 0;
+  margin: 0 2px;
+  border: 1px solid #c7d2fe;
+  border-radius: var(--radius-full);
+  background: var(--primary-soft);
+  color: var(--primary);
+  font: italic 700 10px/1 Georgia, 'Times New Roman', serif;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: help;
+  vertical-align: middle;
+  position: relative;
+  transition: background 0.15s, color 0.15s;
+}
+/* bigger invisible hit area for fingers */
+.rk-info::after { content: ''; position: absolute; inset: -8px; }
+.rk-info:hover, .rk-info-open, .rk-info:focus-visible {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--fg-inverse);
+}
+.rk-info-pop {
+  position: fixed;
+  z-index: 1000;
+  padding: 10px 12px;
+  background: var(--fg-primary);
+  color: var(--fg-inverse);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  font: 400 12.5px/1.5 var(--font-sans);
+  text-align: left;
+  text-transform: none;
+  letter-spacing: 0;
+  white-space: normal;
+  pointer-events: auto;
+}
+
+.rk-block-row {
+  display: flex; align-items: center; gap: 4px;
+}
+.rk-block-row .rk-block { flex: 1; min-width: 0; }
+.rk-palette-tabs { align-items: center; }
+.rk-robot-head .rk-info, .rk-division-head .rk-info { width: 18px; height: 18px; font-size: 11px; }
+.rk-timeline-head {
+  display: flex; align-items: center; gap: 4px;
+  margin: 0; padding: 8px 18px 0;
+  font-size: 11px; font-weight: 700;
+  color: var(--fg-muted);
+  text-transform: uppercase; letter-spacing: 0.6px;
+}
+.rk-modal h4, .rk-debug-head h4, .rk-editor-head h4 { display: flex; align-items: center; gap: 4px; }
+.rk-timeline-head { border-top: 1px solid var(--border); padding-top: 10px; }
+.rk-timeline-head + .rk-timeline { border-top: 0; padding-top: 6px; }

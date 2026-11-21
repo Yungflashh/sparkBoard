@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { defaultPose, flattenSequence, applyBlock, stepDurationMs } from './preview.js'
+import Info from './Info.jsx'
+import { HELP } from './help.js'
 
 const APPLE_X = 170
 const HOUSE_X = -170
@@ -180,6 +182,7 @@ export default function PreviewModal({ program, initialDivisionId, onClose }) {
           }
         </section>
 
+        <p className="rk-timeline-head">Steps <Info text={HELP.timeline} /></p>
         <section className="rk-timeline">
           {steps.map((s, i) => (
             <button
@@ -215,9 +218,11 @@ export default function PreviewModal({ program, initialDivisionId, onClose }) {
               <input type="checkbox" checked={missionOn} onChange={e => setMissionOn(e.target.checked)} />
               <span>🎯 Mission mode</span>
             </label>
+            <Info text={HELP.mission} />
           </div>
           <div className="rk-speed">
             <span>Speed</span>
+            <Info text={HELP.previewSpeed} />
             {[0.5, 1, 2, 4].map(m => (
               <button
                 key={m}
